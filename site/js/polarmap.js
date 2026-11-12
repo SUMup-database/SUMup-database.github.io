@@ -88,6 +88,12 @@ export class PolarMap {
     this.h = 300;
     this.setZone(o.zone || 'greenland', false);
     this._raf = 0;
+    // interactive maps render the full scene into an offscreen bitmap; while the user pans/zooms
+    // that bitmap is just moved/scaled (cheap) and the scene is re-rendered once the gesture settles
+    this._off = o.interactive ? document.createElement('canvas') : null;
+    this._snap = null;
+    this._fast = false;
+    this._idle = 0;
     this._ro = new ResizeObserver(() => this.resize());
     this._ro.observe(canvas.parentElement || canvas);
     if (o.interactive) this._bind();
@@ -96,6 +102,7 @@ export class PolarMap {
 
   setZone(zone, fit = true) {
     this.zone = zone;
+    this._snap = null;
     this.assets = zoneAssets(zone, this.basemap);
     this.proj = this.assets.proj;
     if (fit) this.fit(EXTENT[zone]);
@@ -112,6 +119,11 @@ export class PolarMap {
     this.dpr = window.devicePixelRatio || 1;
     this.canvas.width = Math.round(w * this.dpr);
     this.canvas.height = Math.round(h * this.dpr);
+    if (this._off) {
+      this._off.width = this.canvas.width;
+      this._off.height = this.canvas.height;
+      this._snap = null;
+    }
     // first time the canvas has a real size (it may start inside a hidden view): fit the region
     if (!this._realFit && p.clientWidth > 100 && p.clientHeight > 100) {
       this._realFit = true;
@@ -140,6 +152,7 @@ export class PolarMap {
 
   destroy() {
     this._ro.disconnect();
+    clearTimeout(this._idle);
   }
 
   toScreen(x, y) {
@@ -156,11 +169,27 @@ export class PolarMap {
     this.s = Math.min(smax, Math.max(5, this.s / factor));
     this.cx = mx - (px - this.w / 2) * this.s;
     this.cy = my + (py - this.h / 2) * this.s;
-    this.draw();
+    this._interact();
     this.o.onView?.();
   }
 
+  /** full (sharp) redraw of the scene */
   draw() {
+    clearTimeout(this._idle);
+    this._fast = false;
+    this._schedule();
+  }
+
+  /** view changed by a pan/zoom gesture: move the cached bitmap now, re-render when the gesture settles */
+  _interact() {
+    if (!this._off || !this._snap) { this.draw(); return; }
+    this._fast = true;
+    clearTimeout(this._idle);
+    this._idle = setTimeout(() => this.draw(), 140);
+    this._schedule();
+  }
+
+  _schedule() {
     if (this._raf) return;
     this._raf = requestAnimationFrame(() => {
       this._raf = 0;
@@ -169,7 +198,33 @@ export class PolarMap {
   }
 
   _draw() {
-    const { ctx, w, h, dpr, s } = this;
+    const { ctx, w, h, dpr } = this;
+    if (!this._off) {
+      this._render(ctx);
+      return;
+    }
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    if (this._fast && this._snap) {
+      // cheap path: reuse the last rendered bitmap, shifted and scaled to the current view
+      const sn = this._snap;
+      const k = sn.s / this.s;
+      const dx = (-(w / 2) * k + (sn.cx - this.cx) / this.s + w / 2) * dpr;
+      const dy = (-(h / 2) * k + h / 2 - (sn.cy - this.cy) / this.s) * dpr;
+      ctx.fillStyle = theme.ocean;
+      ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+      ctx.drawImage(this._off, dx, dy, this._off.width * k, this._off.height * k);
+    } else {
+      const octx = this._off.getContext('2d');
+      this._render(octx);
+      this._snap = { cx: this.cx, cy: this.cy, s: this.s };
+      ctx.drawImage(this._off, 0, 0);
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this._scaleBar();
+  }
+
+  _render(ctx) {
+    const { w, h, dpr, s } = this;
     const A = this.assets;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = theme.ocean;
@@ -215,7 +270,6 @@ export class PolarMap {
     }
 
     this.o.drawPoints?.(ctx, this);
-    if (this.o.interactive) this._scaleBar();
   }
 
   _scaleBar() {
@@ -276,7 +330,7 @@ export class PolarMap {
         if (moved > 3) {
           this.cx = drag.cx - dx * this.s;
           this.cy = drag.cy + dy * this.s;
-          this.draw();
+          this._interact();
           this.o.onView?.();
         }
       }

@@ -182,7 +182,11 @@ export function createMapView(root) {
   };
 
   let statusTxt = '';
+  // One stamp per screen pixel and (type, method): when zoomed out, many cells fall on the same pixel
+  // and drawing each of them is the main cost, so a pixel is painted only once per method.
+  let stamps = new Uint32Array(0), stampId = 0;
   function drawPoints(ctx, map) {
+    if (stamps.length !== map.w * map.h) { stamps = new Uint32Array(map.w * map.h); stampId = 0; }
     const z = S.zone;
     const lo = S.yearLo > MIN_YEAR ? S.yearLo : -1;
     const hi = S.yearHi < MAX_YEAR ? S.yearHi : 1e9;
@@ -204,6 +208,7 @@ export function createMapView(root) {
         if (a === b) continue;
         ctx.fillStyle = colorFor(t, r);
         if (!isSq) ctx.beginPath();
+        stampId++;
         for (let i = a; i < b; i++) {
           if (sf >= 0 && L.src[i] !== sf) continue;
           const y0 = L.y0[i], y1 = L.y1[i];
@@ -216,6 +221,11 @@ export function createMapView(root) {
           const px = (L.x[i] - cx) * inv + hw;
           const py = hh - (L.y[i] - cy) * inv;
           if (px < -sz || py < -sz || px > W + sz || py > H + sz) continue;
+          if (px >= 0 && py >= 0 && px < W && py < H) {
+            const k = (py | 0) * W + (px | 0);
+            if (stamps[k] === stampId) continue;
+            stamps[k] = stampId;
+          }
           if (isSq) ctx.fillRect(px - half, py - half, sz, sz);
           else if (t === 'density') {
             ctx.moveTo(px + half, py);
