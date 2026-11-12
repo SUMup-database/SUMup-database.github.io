@@ -4,6 +4,7 @@ import { buildIndex } from './search.js';
 import { createOverview } from './overview.js';
 import { createMapView } from './mapview.js';
 import { createSourcesView, createSearchView } from './sources.js';
+import { createReleaseView } from './release.js';
 
 const views = {};
 const els = {
@@ -11,6 +12,7 @@ const els = {
   map: document.getElementById('view-map'),
   sources: document.getElementById('view-sources'),
   search: document.getElementById('view-search'),
+  release: document.getElementById('view-release'),
 };
 
 // ---- theme ----------------------------------------------------------------
@@ -51,8 +53,9 @@ async function route() {
   if (v === 'map') await views.map.show(params);
   if (v === 'sources') views.sources.show(arg);
   if (v === 'search') { views.search.show(params); }
+  if (v === 'release') views.release.show();
   if (v === 'overview') window.scrollTo(0, 0);
-  document.title = 'SUMup Explorer' + (v === 'overview' ? '' : ' · ' + v[0].toUpperCase() + v.slice(1));
+  document.title = 'SUMup Explorer' + (v === 'overview' ? '' : ' · ' + (v === 'release' ? 'Release notes' : v[0].toUpperCase() + v.slice(1)));
 }
 
 // ---- boot ---------------------------------------------------------------------
@@ -66,6 +69,7 @@ async function route() {
     views.map = createMapView(els.map);
     views.sources = createSourcesView(els.sources);
     views.search = createSearchView(els.search);
+    views.release = createReleaseView(els.release);
     status.remove();
     window.addEventListener('hashchange', route);
     await route();

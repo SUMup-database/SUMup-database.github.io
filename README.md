@@ -8,12 +8,14 @@ files that already exist in `SUMup-compilation-scripts`. No database, no server-
 | **Overview** | Release summary, measurements per year, method families, and the release-level figures from the compilation repo (`doc/figures`, `figures/`). |
 | **Map** | Polar stereographic map (EPSG:3413 Greenland / EPSG:3031 Antarctica) of agglomerated measurement locations. Toggle each variable, each method family, or each individual method; filter by period or by a single source; colour by variable or method; hover/click for sources, methods, years. |
 | **Sources** | Report per source: reference + DOI, location mini-maps, per-variable statistics, methods, timeline, site names, and the plots (`figures/*.png`) of the matching dataset folder, with links to `process.py` / the folder on GitHub. |
+| **Release notes** | What changed between two releases (2026 vs 2025): datasets that are **unchanged**, **updated**, **new** or **removed** per variable, with row counts, filters and a CSV export. |
 | **Search** | Text search over author, year, title, DOI, BibTeX key, dataset folder and site names, with filters (variable, region, method family, period, "has plots"). Search state is kept in the URL. |
 
 ## Build and run
 
 ```bash
 python build_site_data.py          # reads ../SUMup-compilation-scripts, writes site/data and site/figures (~1.5 min)
+python build_release_notes.py      # compares the 2026 and 2025 releases, writes site/data/release_notes.json (~3 min)
 python -m http.server 8000 -d site # then open http://localhost:8000
 ```
 
@@ -24,7 +26,11 @@ Options: `--compilation PATH`, `--out DIR`, `--no-figures` (skip copying/resizin
 ## What is derived, and how
 
 * **Releases**: the newest `SUMup files/SUMup_<year>_<type>_csv` folder (or `.zip`) is used for each variable
-  (currently density 2026, temperature 2026, SMB 2025).
+  (currently 2026 for density, temperature and SMB).
+* **Release notes** (`data/release_notes.json`): `build_release_notes.py` fingerprints every row of two releases (keys replaced by
+  site names / methods, numbers rounded to 4 decimals) and compares them per dataset. A dataset is one bibtex key; keys that were
+  renamed or split between releases are matched through shared rows (≥ 50 %), a shared reference label or an extended key.
+  Options: `--old 2025 --new 2026`. Re-run it for every new release.
 * **Map cells** (`data/loc_<type>_<zone>.bin`): rows are projected and binned on a metric grid
   (250 m for density/temperature, 500 m for SMB) per *(method, source)*, keeping count and first/last year. ~200 k cells, ~4 MB.
 * **Sources** (`data/sources.json`): one source = one `bibtex_key` of the release reference tables, merged across

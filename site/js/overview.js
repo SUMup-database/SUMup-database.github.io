@@ -38,6 +38,7 @@ export function createOverview(root) {
         <a class="btn primary" href="#/map">Open the map</a>
         <a class="btn" href="#/sources">Browse sources</a>
         <a class="btn" href="#/search">Search</a>
+        <a class="btn" href="#/release">Release notes</a>
       </div>
     </section>
 
